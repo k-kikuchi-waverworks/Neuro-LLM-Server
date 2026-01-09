@@ -26,14 +26,16 @@ except ImportError:
     has_bitsandbytes = False
 
 if is_macos:
-    print("[INFO] macOS検出: M5 Mac向け設定を適用します")
+    print("[INFO] macOS検出: Mac向け設定を適用します")
     # M5 Macではbitsandbytesが動作しないため、量子化なしでロード
-    print("  [WARN] 量子化モデルはbitsandbytesが必要（CUDA専用）のため、量子化なしモデルを使用します")
+    print("  [INFO] 量子化モデルはbitsandbytesが必要（CUDA専用）のため、量子化なしモデルを使用します")
+    print("  [INFO] MacではCPU版PyTorchを使用します（正常な動作です）")
     model_name = 'openbmb/MiniCPM-Llama3-V-2_5'  # 量子化なしモデル
     # quantization_configをNoneに設定して量子化を無効化
     quantization_config = None
 elif has_bitsandbytes:
     print("[INFO] Windows検出: 量子化モデルを使用します（bitsandbytesが利用可能）")
+    print("  [INFO] CUDA対応版PyTorchとbitsandbytesが検出されました")
     model_name = 'openbmb/MiniCPM-Llama3-V-2_5-int4'  # 量子化モデル
     # BitsAndBytesConfigを明示的に設定して量子化を有効化
     quantization_config = BitsAndBytesConfig(
@@ -45,6 +47,9 @@ elif has_bitsandbytes:
 else:
     print("[INFO] Windows検出: 量子化なしモデルを使用します（bitsandbytesがインストールされていません）")
     print("  [WARN] 量子化モデルを使用するにはbitsandbytesのインストールが必要です")
+    print("  [TIP] CUDA対応版PyTorchをインストール後、bitsandbytesをインストールしてください")
+    print("  [TIP] インストール方法: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121")
+    print("  [TIP] その後: pip install bitsandbytes")
     model_name = 'openbmb/MiniCPM-Llama3-V-2_5'  # 量子化なしモデル
     # quantization_configをNoneに設定して量子化を無効化
     quantization_config = None

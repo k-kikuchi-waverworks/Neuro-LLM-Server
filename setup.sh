@@ -38,15 +38,30 @@ pip install --upgrade pip
 # PyTorchをインストール（プラットフォーム別）
 if [ "$PLATFORM" = "mac" ]; then
     echo "[Mac] M5 Mac向けPyTorchをインストール中..."
+    echo "  [INFO] CPU版PyTorchをインストールします（量子化なしモデルを使用）"
     pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cpu
 else
     echo "[Windows] PyTorchをインストール中..."
-    pip install torch torchvision torchaudio
+    echo "  [INFO] CUDA 12.1対応版PyTorchをインストールします（bitsandbytesで量子化モデルを使用可能）"
+    echo "  [TIP] CUDAが利用できない場合は、CPU版がインストールされます"
+    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 fi
 
 # 依存関係をインストール
 echo "[INFO] 依存関係をインストール中..."
 pip install -r requirements.txt
+
+# Windowsでbitsandbytesをインストール（CUDA環境の場合）
+if [ "$PLATFORM" = "windows" ]; then
+    echo "[Windows] bitsandbytesのインストールを試行中..."
+    echo "  [INFO] CUDA環境で量子化モデルを使用するためにbitsandbytesが必要です"
+    if pip install bitsandbytes 2>/dev/null; then
+        echo "  [OK] bitsandbytesのインストールに成功しました"
+    else
+        echo "  [WARN] bitsandbytesのインストールに失敗しました（CUDAが利用できない可能性があります）"
+        echo "  [TIP] 手動でインストールする場合: pip install bitsandbytes"
+    fi
+fi
 
 # fastapi[standard]をインストール（fastapi runコマンド用）
 echo "[INFO] fastapi[standard]をインストール中..."
