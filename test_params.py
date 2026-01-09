@@ -49,7 +49,7 @@ def test_streaming():
     try:
         response = requests.post(url, json=payload, stream=True, timeout=30)
         if response.status_code == 200:
-            print("✅ ストリーミングレスポンス受信開始")
+            print("[OK] ストリーミングレスポンス受信開始")
             chunk_count = 0
             for line in response.iter_lines():
                 if line:
@@ -68,12 +68,12 @@ def test_streaming():
                                     chunk_count += 1
                         except json.JSONDecodeError:
                             pass
-            print(f"\n✅ ストリーミングテスト完了（{chunk_count}チャンク受信）")
+            print(f"\n[OK] ストリーミングテスト完了（{chunk_count}チャンク受信）")
         else:
-            print(f"❌ エラー: {response.status_code}")
+            print(f"[ERROR] エラー: {response.status_code}")
             print(response.text)
     except Exception as e:
-        print(f"❌ エラー: {e}")
+        print(f"[ERROR] エラー: {e}")
 
 def test_non_streaming():
     """非ストリーミングモードのテスト"""
@@ -109,14 +109,14 @@ def test_non_streaming():
         response = requests.post(url, json=payload, timeout=30)
         if response.status_code == 200:
             result = response.json()
-            print("✅ 非ストリーミングレスポンス受信")
+            print("[OK] 非ストリーミングレスポンス受信")
             print(f"応答: {result.get('choices', [{}])[0].get('message', {}).get('content', '')}")
             print(f"モデル: {result.get('model', 'N/A')}")
         else:
-            print(f"❌ エラー: {response.status_code}")
+            print(f"[ERROR] エラー: {response.status_code}")
             print(response.text)
     except Exception as e:
-        print(f"❌ エラー: {e}")
+        print(f"[ERROR] エラー: {e}")
 
 def test_parameters():
     """パラメータが正しく受け取られているかテスト"""
@@ -143,7 +143,7 @@ def test_parameters():
     try:
         response = requests.post(url, json=payload, stream=True, timeout=30)
         if response.status_code == 200:
-            print("✅ ストリーミングレスポンス受信開始（max_tokens=20で制限）")
+            print("[OK] ストリーミングレスポンス受信開始（max_tokens=20で制限）")
             total_chars = 0
             for line in response.iter_lines():
                 if line:
@@ -162,15 +162,15 @@ def test_parameters():
                                     total_chars += len(content)
                         except json.JSONDecodeError:
                             pass
-            print(f"\n✅ max_tokens制限テスト完了（合計{total_chars}文字）")
+            print(f"\n[OK] max_tokens制限テスト完了（合計{total_chars}文字）")
         else:
-            print(f"❌ エラー: {response.status_code}")
+            print(f"[ERROR] エラー: {response.status_code}")
             print(response.text)
     except Exception as e:
-        print(f"❌ エラー: {e}")
+        print(f"[ERROR] エラー: {e}")
 
 if __name__ == "__main__":
-    print("🧪 Neuro-LLM-Server パラメータ実装テスト")
+    print("[TEST] Neuro-LLM-Server パラメータ実装テスト")
     print("=" * 60)
     print("サーバーが起動していることを確認してください: http://127.0.0.1:8000")
     print("=" * 60)
@@ -179,12 +179,12 @@ if __name__ == "__main__":
     try:
         response = requests.get("http://127.0.0.1:8000/docs", timeout=5)
         if response.status_code == 200:
-            print("✅ Neuro-LLM-Serverに接続できました\n")
+            print("[OK] Neuro-LLM-Serverに接続できました\n")
         else:
-            print("⚠️  Neuro-LLM-Serverに接続できません（起動していない可能性があります）\n")
+            print("[WARN] Neuro-LLM-Serverに接続できません（起動していない可能性があります）\n")
     except Exception as e:
-        print(f"⚠️  Neuro-LLM-Serverに接続できません: {e}\n")
-        print("💡 サーバーを起動してください:")
+        print(f"[WARN] Neuro-LLM-Serverに接続できません: {e}\n")
+        print("[TIP] サーバーを起動してください:")
         print("   cd tools/Neuro-LLM-Server")
         print("   source venv/bin/activate")
         print("   uvicorn main:app --host 127.0.0.1 --port 8000")
@@ -196,5 +196,5 @@ if __name__ == "__main__":
     test_parameters()
 
     print("\n" + "=" * 60)
-    print("✅ すべてのテスト完了")
+    print("[OK] すべてのテスト完了")
     print("=" * 60)

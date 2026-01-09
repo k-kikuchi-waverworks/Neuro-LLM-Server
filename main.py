@@ -14,23 +14,26 @@ from PIL import Image
 from io import BytesIO
 from transformers import AutoModel, AutoTokenizer, BitsAndBytesConfig
 
-# ダミーのbitsandbytesモジュールを作成してimportlib.metadata.versionのチェックを回避
-class DummyBitsAndBytes:
-    __version__ = "0.0.0"  # 適当なバージョンを設定
-sys.modules['bitsandbytes'] = DummyBitsAndBytes()
-
 # M5 Macの場合、量子化なしでモデルをロード
+# Windowsでもbitsandbytesがインストールされていない場合は量子化なしモデルを使用
 is_macos = platform.system() == "Darwin"
 
+# bitsandbytesがインストールされているかチェック
+try:
+    import bitsandbytes
+    has_bitsandbytes = True
+except ImportError:
+    has_bitsandbytes = False
+
 if is_macos:
-    print("🍎 macOS検出: M5 Mac向け設定を適用します")
+    print("[INFO] macOS検出: M5 Mac向け設定を適用します")
     # M5 Macではbitsandbytesが動作しないため、量子化なしでロード
-    print("  ⚠️  量子化モデルはbitsandbytesが必要（CUDA専用）のため、量子化なしモデルを使用します")
+    print("  [WARN] 量子化モデルはbitsandbytesが必要（CUDA専用）のため、量子化なしモデルを使用します")
     model_name = 'openbmb/MiniCPM-Llama3-V-2_5'  # 量子化なしモデル
     # quantization_configをNoneに設定して量子化を無効化
     quantization_config = None
-else:
-    print("🪟 Windows検出: 量子化モデルを使用します")
+elif has_bitsandbytes:
+    print("[INFO] Windows検出: 量子化モデルを使用します（bitsandbytesが利用可能）")
     model_name = 'openbmb/MiniCPM-Llama3-V-2_5-int4'  # 量子化モデル
     # BitsAndBytesConfigを明示的に設定して量子化を有効化
     quantization_config = BitsAndBytesConfig(
@@ -39,9 +42,15 @@ else:
         bnb_4bit_compute_dtype=torch.float16,
         bnb_4bit_use_double_quant=True,
     )
+else:
+    print("[INFO] Windows検出: 量子化なしモデルを使用します（bitsandbytesがインストールされていません）")
+    print("  [WARN] 量子化モデルを使用するにはbitsandbytesのインストールが必要です")
+    model_name = 'openbmb/MiniCPM-Llama3-V-2_5'  # 量子化なしモデル
+    # quantization_configをNoneに設定して量子化を無効化
+    quantization_config = None
 
-print(f"📦 モデルをロード中: {model_name}")
-print("   ⚠️  初回起動時はモデルのダウンロードに時間がかかります")
+print(f"[INFO] モデルをロード中: {model_name}")
+print("   [WARN] 初回起動時はモデルのダウンロードに時間がかかります")
 try:
     model = AutoModel.from_pretrained(
         model_name,
@@ -50,7 +59,7 @@ try:
         torch_dtype=torch.float16 if is_macos else None,  # M5 Macではfloat16を推奨
     )
 except Exception as e:
-    print(f"❌ モデルのロード中にエラーが発生しました: {e}")
+    print(f"[ERROR] モデルのロード中にエラーが発生しました: {e}")
     import traceback
     traceback.print_exc()
     sys.exit(1)
@@ -139,7 +148,7 @@ def chat_generator(chatRequest: ChatRequest):
     if image is None:
         # ダミー画像を生成（モデルが空のリストを処理できないため、448x448の黒画像を使用）
         image = Image.new('RGB', (448, 448), color=(0, 0, 0))
-        print("⚠️  画像がないため、ダミー画像を使用します（テキストのみモード）")
+        print("[WARN] 画像がないため、ダミー画像を使用します（テキストのみモード）")
 
     # パラメータをリクエストから取得（デフォルト値を使用）
     temperature = chatRequest.temperature
@@ -248,7 +257,7 @@ def chat_completions(chatRequest: ChatRequest):
             }
             return response
         except Exception as e:
-            print(f"❌ エラー: {e}")
+            print(f"[ERROR] エラー: {e}")
             import traceback
             traceback.print_exc()
             return {"error": str(e)}, 500

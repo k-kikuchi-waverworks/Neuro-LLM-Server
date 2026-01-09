@@ -1,29 +1,42 @@
 #!/bin/bash
 
 # Neuro-LLM-Server 起動スクリプト
-# M5 Mac対応版
+# Mac/Windows対応版
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-echo "🚀 Neuro-LLM-Server を起動します..."
+# プラットフォーム判定
+if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; then
+    PLATFORM="windows"
+    VENV_ACTIVATE="venv/Scripts/activate"
+else
+    PLATFORM="mac"
+    VENV_ACTIVATE="venv/bin/activate"
+fi
+
+echo "[INFO] Neuro-LLM-Server を起動します..."
 echo ""
 
 # venvをアクティベート
 if [ ! -d "venv" ]; then
-    echo "❌ venvが見つかりません。まず ./setup.sh を実行してください"
+    echo "[ERROR] venvが見つかりません。まず ./setup.sh を実行してください"
     exit 1
 fi
 
-source venv/bin/activate
+source "$VENV_ACTIVATE"
 
-# M5 Mac向けの環境変数を設定
-export PYTORCH_ENABLE_MPS_FALLBACK=1
-export PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.0
-export USE_MPS=1
+# M5 Mac向けの環境変数を設定（Macの場合のみ）
+if [ "$PLATFORM" = "mac" ]; then
+    export PYTORCH_ENABLE_MPS_FALLBACK=1
+    export PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.0
+    export USE_MPS=1
+    echo "[OK] M5 Mac向けGPU設定を適用しました"
+else
+    echo "[OK] Windows向け設定を適用しました"
+fi
 
-echo "🍎 M5 Mac向けGPU設定を適用しました"
-echo "📡 サーバーを起動中..."
+echo "[INFO] サーバーを起動中..."
 echo "   エンドポイント: http://127.0.0.1:8000"
 echo ""
 
