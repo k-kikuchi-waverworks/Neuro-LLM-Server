@@ -74,6 +74,12 @@ fi
 echo "[INFO] fastapi[standard]をインストール中..."
 pip install "fastapi[standard]"
 
+# uvicornがインストールされているか確認
+if ! python -c "import uvicorn" 2>/dev/null; then
+    echo "[WARN] uvicornがインストールされていません。明示的にインストールします..."
+    pip install uvicorn[standard]
+fi
+
 echo "[OK] セットアップが完了しました！"
 echo ""
 echo "起動方法:"
