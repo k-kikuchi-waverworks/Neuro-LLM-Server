@@ -43,5 +43,5 @@ echo "[INFO] サーバーを起動中..."
 echo "   エンドポイント: http://127.0.0.1:8000"
 echo ""
 
-# FastAPIサーバーを起動
-uvicorn main:app --host 127.0.0.1 --port 8000
+# FastAPIサーバーを起動（python -m uvicornを使用）
+python -m uvicorn main:app --host 127.0.0.1 --port 8000
