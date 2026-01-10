@@ -15,8 +15,9 @@ from io import BytesIO
 from transformers import AutoModel, AutoTokenizer, BitsAndBytesConfig
 
 # M5 Macの場合、量子化なしでモデルをロード
-# Windowsでもbitsandbytesがインストールされていない場合は量子化なしモデルを使用
+# Linux/WSLでもbitsandbytesがインストールされていない場合は量子化なしモデルを使用
 is_macos = platform.system() == "Darwin"
+is_linux = platform.system() == "Linux"
 
 # bitsandbytesがインストールされているかチェック
 try:
@@ -34,7 +35,7 @@ if is_macos:
     # quantization_configをNoneに設定して量子化を無効化
     quantization_config = None
 elif has_bitsandbytes:
-    print("[INFO] Windows検出: 量子化モデルを使用します（bitsandbytesが利用可能）")
+    print("[INFO] Linux/WSL検出: 量子化モデルを使用します（bitsandbytesが利用可能）")
     print("  [INFO] CUDA対応版PyTorchとbitsandbytesが検出されました")
     model_name = 'openbmb/MiniCPM-Llama3-V-2_5-int4'  # 量子化モデル
     # BitsAndBytesConfigを明示的に設定して量子化を有効化
@@ -45,7 +46,7 @@ elif has_bitsandbytes:
         bnb_4bit_use_double_quant=True,
     )
 else:
-    print("[INFO] Windows検出: 量子化なしモデルを使用します（bitsandbytesがインストールされていません）")
+    print("[INFO] Linux/WSL検出: 量子化なしモデルを使用します（bitsandbytesがインストールされていません）")
     print("  [WARN] 量子化モデルを使用するにはbitsandbytesのインストールが必要です")
     print("  [TIP] CUDA対応版PyTorchをインストール後、bitsandbytesをインストールしてください")
     print("  [TIP] インストール方法: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121")
