@@ -1,6 +1,6 @@
 Pillow==10.1.0
 # torchとtorchvisionはプラットフォーム別にインストールが必要です
-# - Windows (CUDA 12.1): pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+# - Linux/WSL (CUDA 12.1): pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
 #   → CUDA対応版がインストールされ、bitsandbytesで量子化モデルが使用可能
 # - macOS: pip install --pre torch torchvision --index-url https://download.pytorch.org/whl/nightly/cpu
 #   → CPU版がインストールされ、量子化なしモデルを使用（正常な動作）
@@ -10,11 +10,11 @@ torchvision>=0.16.0
 transformers==4.40.0
 sentencepiece==0.1.99
 accelerate==0.30.1
-# bitsandbytesはCUDA環境でのみ動作します（Windows/CUDA対応、macOSでは不要）
-# - Windows: CUDA対応版PyTorchインストール後、pip install bitsandbytes でインストール
+# bitsandbytesはCUDA環境でのみ動作します（Linux/WSL/CUDA対応、macOSでは不要）
+# - Linux/WSL: CUDA対応版PyTorchインストール後、pip install bitsandbytes でインストール
 #   → インストールされると量子化モデル（int4）が使用され、GPU負荷が軽減されます
 # - macOS: インストール不要（bitsandbytesはCUDA専用のため動作しません）
-# setup.shを実行するとWindowsで自動的にインストールを試行します
+# setup.shを実行するとLinux/WSLで自動的にインストールを試行します
 # bitsandbytes>=0.43.1
 sse-starlette==2.1.0
 fastapi==0.111.0
