@@ -12,56 +12,97 @@ from sse_starlette.sse import EventSourceResponse
 import torch
 from PIL import Image
 from io import BytesIO
-from transformers import AutoModel, AutoTokenizer, BitsAndBytesConfig
+from transformers import AutoModel, AutoTokenizer
 
-# M5 Macの場合、量子化なしでモデルをロード
-# Linux/WSLでもbitsandbytesがインストールされていない場合は量子化なしモデルを使用
+# プラットフォーム判定（Mac向けの設定用）
 is_macos = platform.system() == "Darwin"
-is_linux = platform.system() == "Linux"
 
-# bitsandbytesがインストールされているかチェック
-try:
-    import bitsandbytes
-    has_bitsandbytes = True
-except ImportError:
-    has_bitsandbytes = False
-
-if is_macos:
-    print("[INFO] macOS検出: Mac向け設定を適用します")
-    # M5 Macではbitsandbytesが動作しないため、量子化なしでロード
-    print("  [INFO] 量子化モデルはbitsandbytesが必要（CUDA専用）のため、量子化なしモデルを使用します")
-    print("  [INFO] MacではCPU版PyTorchを使用します（正常な動作です）")
-    model_name = 'openbmb/MiniCPM-Llama3-V-2_5'  # 量子化なしモデル
-    # quantization_configをNoneに設定して量子化を無効化
-    quantization_config = None
-elif has_bitsandbytes:
-    print("[INFO] Linux/WSL検出: 量子化モデルを使用します（bitsandbytesが利用可能）")
-    print("  [INFO] CUDA対応版PyTorchとbitsandbytesが検出されました")
-    model_name = 'openbmb/MiniCPM-Llama3-V-2_5-int4'  # 量子化モデル
-    # BitsAndBytesConfigを明示的に設定して量子化を有効化
-    quantization_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype=torch.float16,
-        bnb_4bit_use_double_quant=True,
-    )
-else:
-    print("[INFO] Linux/WSL検出: 量子化なしモデルを使用します（bitsandbytesがインストールされていません）")
-    print("  [WARN] 量子化モデルを使用するにはbitsandbytesのインストールが必要です")
-    print("  [TIP] CUDA対応版PyTorchをインストール後、bitsandbytesをインストールしてください")
-    print("  [TIP] インストール方法: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121")
-    print("  [TIP] その後: pip install bitsandbytes")
-    model_name = 'openbmb/MiniCPM-Llama3-V-2_5'  # 量子化なしモデル
-    # quantization_configをNoneに設定して量子化を無効化
-    quantization_config = None
+# モデル名
+model_name = 'openbmb/MiniCPM-Llama3-V-2_5'
 
 print(f"[INFO] モデルをロード中: {model_name}")
 print("   [WARN] 初回起動時はモデルのダウンロードに時間がかかります")
+
+# Hugging Faceキャッシュファイルの修正パッチを適用
+def fix_model_cache_imports():
+    """モデルキャッシュファイルのインポートエラーを修正"""
+    from pathlib import Path
+    import re
+
+    # Hugging Faceキャッシュディレクトリを取得
+    cache_dir = Path.home() / ".cache" / "huggingface" / "modules" / "transformers_modules"
+
+    if not cache_dir.exists():
+        return
+
+    # MiniCPM-Llama3-V-2_5モデルのキャッシュディレクトリを検索
+    model_cache_dirs = list(cache_dir.glob("openbmb/MiniCPM-Llama3-V-2_5/*"))
+
+    for model_dir in model_cache_dirs:
+        resampler_file = model_dir / "resampler.py"
+        if resampler_file.exists():
+            try:
+                content = resampler_file.read_text(encoding='utf-8')
+                original_content = content
+
+                # Listが使用されているかチェック
+                uses_list = bool(re.search(r'\bList\[', content))
+
+                if not uses_list:
+                    continue
+
+                # Listがインポートされているかチェック
+                has_list_import = bool(re.search(r'from typing import.*\bList\b', content) or
+                                       re.search(r'from typing import List', content))
+
+                if has_list_import:
+                    continue
+
+                # typingインポート文を探す
+                typing_import_pattern = r'from typing import\s+([^#\n]+)'
+                match = re.search(typing_import_pattern, content)
+
+                if match:
+                    # 既存のtypingインポートにListを追加
+                    existing_imports = match.group(1).strip()
+                    if "List" not in existing_imports:
+                        # カンマ区切りで追加
+                        new_imports = existing_imports.rstrip() + ", List"
+                        content = content.replace(
+                            match.group(0),
+                            f"from typing import {new_imports}"
+                        )
+                else:
+                    # typingインポートが全くない場合、ファイルの先頭付近に追加
+                    lines = content.split('\n')
+                    insert_pos = 0
+                    # 最初のimport文の後に追加
+                    for i, line in enumerate(lines):
+                        if line.strip().startswith('import ') or line.strip().startswith('from '):
+                            insert_pos = i + 1
+                    # import文がない場合は先頭に追加
+                    if insert_pos == 0:
+                        insert_pos = 0
+                    lines.insert(insert_pos, "from typing import List")
+                    content = '\n'.join(lines)
+
+                # 変更があった場合のみ書き込む
+                if content != original_content:
+                    resampler_file.write_text(content, encoding='utf-8')
+                    print(f"  [INFO] キャッシュファイルを修正しました: {resampler_file}")
+            except Exception as e:
+                print(f"  [WARN] キャッシュファイルの修正中にエラー: {e}")
+
+# キャッシュファイルの修正を試行
+try:
+    fix_model_cache_imports()
+except Exception as e:
+    print(f"  [WARN] キャッシュファイルの修正をスキップ: {e}")
+
 try:
     model = AutoModel.from_pretrained(
         model_name,
         trust_remote_code=True,
-        quantization_config=quantization_config,  # 量子化設定を渡す
         torch_dtype=torch.float16 if is_macos else None,  # M5 Macではfloat16を推奨
     )
 except Exception as e:
@@ -113,7 +154,7 @@ class ChatResponse(BaseModel):
     id: str = "chatcmpl-00000"
     object: str = "chat.completions.chunk"
     created: int = 0
-    model: str = "MiniCPM-Llama3-V-2_5-int4"
+    model: str = "MiniCPM-Llama3-V-2_5"
     choices: list[Choice]
 
 app = FastAPI()
@@ -246,7 +287,7 @@ def chat_completions(chatRequest: ChatRequest):
                 "id": "chatcmpl-00000",
                 "object": "chat.completion",
                 "created": int(datetime.now().timestamp()),
-                "model": "MiniCPM-Llama3-V-2_5-int4",
+                "model": "MiniCPM-Llama3-V-2_5",
                 "choices": [{
                     "index": 0,
                     "message": {
