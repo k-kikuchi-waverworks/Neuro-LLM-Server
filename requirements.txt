@@ -1,7 +1,7 @@
 Pillow==10.1.0
 # torchとtorchvisionはプラットフォーム別にインストールが必要です
-# - Linux/WSL/Windows (CUDA 12.1): pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
-# - Linux/WSL/Windows (CUDA 12.4): pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+# - Windows (CUDA 12.1): pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+# - Windows (CUDA 12.4): pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
 # - Windows (CUDA 13.1): CUDA 12.4版を使用（後方互換性あり）
 #   → pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
 torch>=2.1.0
