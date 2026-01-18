@@ -1,24 +1,22 @@
 #!/bin/bash
 
 # Neuro-LLM-Server セットアップスクリプト
-# Mac/Linux対応
+# Linux/WSL対応
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 # プラットフォーム判定
 if [[ "$OSTYPE" == "darwin"* ]]; then
-    PLATFORM="mac"
-    echo "[Mac] Neuro-LLM-Server セットアップを開始します..."
-    PYTHON_CMD="python3"
+    echo "[ERROR] macOSはサポート対象外です（Linux/WSLのみ対応）"
+    exit 1
 elif [[ "$OSTYPE" == "linux-gnu"* || "$OSTYPE" == "linux"* ]]; then
     PLATFORM="linux"
     echo "[Linux/WSL] Neuro-LLM-Server セットアップを開始します..."
     PYTHON_CMD="python3"
 else
-    PLATFORM="mac"
-    echo "[Mac] Neuro-LLM-Server セットアップを開始します（デフォルト）..."
-    PYTHON_CMD="python3"
+    echo "[ERROR] 未対応のOSです（Linux/WSLのみ対応）"
+    exit 1
 fi
 
 VENV_ACTIVATE="venv/bin/activate"
@@ -51,14 +49,9 @@ echo "[OK] venvをアクティベートしました"
 echo "[INFO] pipをアップグレード中..."
 pip install --upgrade pip
 
-# PyTorchをインストール（プラットフォーム別）
-if [ "$PLATFORM" = "mac" ]; then
-    echo "[Mac] PyTorchをインストール中..."
-    pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cpu
-else
-    echo "[Linux/WSL] PyTorchをインストール中..."
-    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-fi
+# PyTorchをインストール（Linux/WSL）
+echo "[Linux/WSL] PyTorchをインストール中..."
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
 # 依存関係をインストール
 echo "[INFO] 依存関係をインストール中..."

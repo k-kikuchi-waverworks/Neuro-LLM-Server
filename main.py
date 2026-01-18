@@ -1,7 +1,6 @@
 # main.py
 import base64
 import json
-import platform
 import os
 import sys
 import importlib.metadata
@@ -13,9 +12,6 @@ import torch
 from PIL import Image
 from io import BytesIO
 from transformers import AutoModel, AutoTokenizer
-
-# プラットフォーム判定（Mac向けの設定用）
-is_macos = platform.system() == "Darwin"
 
 # モデル名
 model_name = 'openbmb/MiniCPM-Llama3-V-2_5'
@@ -103,7 +99,7 @@ try:
     model = AutoModel.from_pretrained(
         model_name,
         trust_remote_code=True,
-        torch_dtype=torch.float16 if is_macos else None,  # M5 Macではfloat16を推奨
+        torch_dtype=None,
     )
 except Exception as e:
     print(f"[ERROR] モデルのロード中にエラーが発生しました: {e}")

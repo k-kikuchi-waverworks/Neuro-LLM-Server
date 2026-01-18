@@ -4,7 +4,6 @@ Pillow==10.1.0
 # - Linux/WSL/Windows (CUDA 12.4): pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
 # - Windows (CUDA 13.1): CUDA 12.4版を使用（後方互換性あり）
 #   → pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
-# - macOS: pip install --pre torch torchvision --index-url https://download.pytorch.org/whl/nightly/cpu
 torch>=2.1.0
 torchvision>=0.16.0
 transformers==4.40.0
