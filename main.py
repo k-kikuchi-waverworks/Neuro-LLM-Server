@@ -1,289 +1,318 @@
-# main.py
-import base64
-import json
+"""Neuro-LLM-Server - Production implementation"""
+
 import os
 import sys
-import importlib.metadata
-from typing import Union, List
-from pydantic import BaseModel
-from fastapi import FastAPI, Response
+import json
+import time
+from datetime import datetime
+from typing import List, Optional
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
-import torch
-from PIL import Image
-from io import BytesIO
-from transformers import AutoModel, AutoTokenizer
+from pydantic import BaseModel
 
-# モデル名
-model_name = 'openbmb/MiniCPM-Llama3-V-2_5'
+from config import Config
+from model_manager import ModelManager
+from inference_engine import InferenceEngine
+from monitoring import Monitoring
+from request_queue import RequestQueue
+from utils.errors import (
+    NeuroLLMError,
+    ModelLoadError,
+    InferenceError,
+    ValidationError,
+    TimeoutError as NeuroTimeoutError,
+)
+from utils.logging import setup_logging, get_logger
 
-print(f"[INFO] モデルをロード中: {model_name}")
-print("   [WARN] 初回起動時はモデルのダウンロードに時間がかかります")
+# Global instances
+config: Optional[Config] = None
+model_manager: Optional[ModelManager] = None
+inference_engine: Optional[InferenceEngine] = None
+monitoring: Optional[Monitoring] = None
+request_queue: Optional[RequestQueue] = None
+logger = None
 
-# Hugging Faceキャッシュファイルの修正パッチを適用
-def fix_model_cache_imports():
-    """モデルキャッシュファイルのインポートエラーを修正"""
-    from pathlib import Path
-    import re
 
-    # Hugging Faceキャッシュディレクトリを取得
-    cache_dir = Path.home() / ".cache" / "huggingface" / "modules" / "transformers_modules"
-
-    if not cache_dir.exists():
-        return
-
-    # MiniCPM-Llama3-V-2_5モデルのキャッシュディレクトリを検索
-    model_cache_dirs = list(cache_dir.glob("openbmb/MiniCPM-Llama3-V-2_5/*"))
-
-    for model_dir in model_cache_dirs:
-        resampler_file = model_dir / "resampler.py"
-        if resampler_file.exists():
-            try:
-                content = resampler_file.read_text(encoding='utf-8')
-                original_content = content
-
-                # Listが使用されているかチェック
-                uses_list = bool(re.search(r'\bList\[', content))
-
-                if not uses_list:
-                    continue
-
-                # Listがインポートされているかチェック
-                has_list_import = bool(re.search(r'from typing import.*\bList\b', content) or
-                                       re.search(r'from typing import List', content))
-
-                if has_list_import:
-                    continue
-
-                # typingインポート文を探す
-                typing_import_pattern = r'from typing import\s+([^#\n]+)'
-                match = re.search(typing_import_pattern, content)
-
-                if match:
-                    # 既存のtypingインポートにListを追加
-                    existing_imports = match.group(1).strip()
-                    if "List" not in existing_imports:
-                        # カンマ区切りで追加
-                        new_imports = existing_imports.rstrip() + ", List"
-                        content = content.replace(
-                            match.group(0),
-                            f"from typing import {new_imports}"
-                        )
-                else:
-                    # typingインポートが全くない場合、ファイルの先頭付近に追加
-                    lines = content.split('\n')
-                    insert_pos = 0
-                    # 最初のimport文の後に追加
-                    for i, line in enumerate(lines):
-                        if line.strip().startswith('import ') or line.strip().startswith('from '):
-                            insert_pos = i + 1
-                    # import文がない場合は先頭に追加
-                    if insert_pos == 0:
-                        insert_pos = 0
-                    lines.insert(insert_pos, "from typing import List")
-                    content = '\n'.join(lines)
-
-                # 変更があった場合のみ書き込む
-                if content != original_content:
-                    resampler_file.write_text(content, encoding='utf-8')
-                    print(f"  [INFO] キャッシュファイルを修正しました: {resampler_file}")
-            except Exception as e:
-                print(f"  [WARN] キャッシュファイルの修正中にエラー: {e}")
-
-# キャッシュファイルの修正を試行
-try:
-    fix_model_cache_imports()
-except Exception as e:
-    print(f"  [WARN] キャッシュファイルの修正をスキップ: {e}")
-
-try:
-    model = AutoModel.from_pretrained(
-        model_name,
-        trust_remote_code=True,
-        torch_dtype=None,
-    )
-except Exception as e:
-    print(f"[ERROR] モデルのロード中にエラーが発生しました: {e}")
-    import traceback
-    traceback.print_exc()
-    sys.exit(1)
-
-tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
-model.eval()
-
+# Pydantic models for API
 class ImageURL(BaseModel):
     url: str = ""
 
+
 class Content(BaseModel):
     type: str
-    text: str | None = None
-    image_url: ImageURL | None = None
+    text: Optional[str] = None
+    image_url: Optional[ImageURL] = None
+
 
 class Message(BaseModel):
     role: str
-    content: list[Content]
+    content: List[Content]
+
 
 class ChatRequest(BaseModel):
-    messages: list[Message]
-    # OpenAI互換パラメータ（オプション）
+    messages: List[Message]
     temperature: float = 0.7
     max_tokens: int = 200
     top_p: float = 1.0
     frequency_penalty: float = 0.0
     presence_penalty: float = 0.0
-    stop: list[str] | None = None
+    stop: Optional[List[str]] = None
     stream: bool = True
-    # text-generation-webui互換パラメータ（オプション）
     mode: str = "instruct"
     skip_special_tokens: bool = False
     custom_token_bans: str = ""
+
 
 class Delta(BaseModel):
     role: str = "assistant"
     content: str = ""
 
+
 class Choice(BaseModel):
     index: int = 0
-    finish_reason: str | None = None
+    finish_reason: Optional[str] = None
     delta: Delta
+
 
 class ChatResponse(BaseModel):
     id: str = "chatcmpl-00000"
     object: str = "chat.completions.chunk"
     created: int = 0
     model: str = "MiniCPM-Llama3-V-2_5"
-    choices: list[Choice]
+    choices: List[Choice]
 
-app = FastAPI()
 
-def base64_to_image(base64_string):
-    # Remove the data URI prefix if present
-    if "data:image" in base64_string:
-        base64_string = base64_string.split(",")[1]
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for startup and shutdown"""
+    global config, model_manager, inference_engine, monitoring, request_queue, logger
+    
+    # Startup
+    try:
+        # Load configuration
+        config_path = os.getenv("NEURO_LLM_CONFIG", "config.yaml")
+        config = Config.from_file(config_path)
+        config.validate()
+        
+        # Setup logging
+        setup_logging(
+            log_level=config.logging.level,
+            log_file=config.logging.log_file if config.logging.log_file else None
+        )
+        logger = get_logger(__name__)
+        
+        logger.info("=" * 60)
+        logger.info("Neuro-LLM-Server Starting")
+        logger.info("=" * 60)
+        logger.info(f"Model: {config.model.name}")
+        logger.info(f"Quantization: {config.model.quantization}")
+        logger.info(f"Server: {config.server.host}:{config.server.port}")
+        
+        # Initialize components
+        model_manager = ModelManager(config)
+        logger.info("Loading model...")
+        model_manager.load_model()
+        logger.info("Model loaded successfully")
+        
+        inference_engine = InferenceEngine(model_manager, config)
+        monitoring = Monitoring(config)
+        request_queue = RequestQueue(
+            max_concurrent=config.server.max_concurrent_requests,
+            enable_queue=config.server.enable_queue
+        )
+        
+        logger.info("=" * 60)
+        logger.info("Neuro-LLM-Server Ready")
+        logger.info("=" * 60)
+        
+    except Exception as e:
+        logger.error(f"Failed to start server: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+    
+    yield
+    
+    # Shutdown
+    logger.info("Shutting down Neuro-LLM-Server...")
 
-    # Decode the Base64 string into bytes
-    image_bytes = base64.b64decode(base64_string)
-    return image_bytes
 
-def create_image_from_bytes(image_bytes):
-    # Create a BytesIO object to handle the image data
-    image_stream = BytesIO(image_bytes)
+# Create FastAPI app
+app = FastAPI(
+    title="Neuro-LLM-Server",
+    description="Production-ready multimodal LLM server for MiniCPM-Llama3-V-2_5",
+    version="2.0.0",
+    lifespan=lifespan,
+)
 
-    # Open the image using Pillow (PIL)
-    image = Image.open(image_stream)
-    return image
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-def chat_generator(chatRequest: ChatRequest):
-    image = None
-    msgs = []
 
-    for message in chatRequest.messages:
-        for content in message.content:
-            if content.type == "text":
-                msgs.append({'role': message.role, 'content': content.text})
-            elif content.type == "image_url" and content.image_url and content.image_url.url:
-                image_bytes = base64_to_image(content.image_url.url)
-                image = create_image_from_bytes(image_bytes).convert('RGB')
+# Middleware for request timing
+@app.middleware("http")
+async def timing_middleware(request: Request, call_next):
+    """Middleware to measure request latency"""
+    start_time = time.time()
+    response = await call_next(request)
+    latency = time.time() - start_time
+    
+    # Record metrics (skip for monitoring endpoints)
+    if monitoring and not request.url.path.startswith(("/health", "/metrics")):
+        monitoring.record_request(latency, error=response.status_code >= 400)
+    
+    return response
 
-    ## if you want to use streaming, please make sure sampling=True and stream=True
-    ## the model.chat will return a generator
-    # 画像がない場合、モデルのprocessorが空のリストを処理できないため、
-    # 適切なサイズのダミー画像を生成する（モデルは448x448を期待）
-    if image is None:
-        # ダミー画像を生成（モデルが空のリストを処理できないため、448x448の黒画像を使用）
-        image = Image.new('RGB', (448, 448), color=(0, 0, 0))
-        print("[WARN] 画像がないため、ダミー画像を使用します（テキストのみモード）")
 
-    # パラメータをリクエストから取得（デフォルト値を使用）
-    temperature = chatRequest.temperature
-    max_tokens = chatRequest.max_tokens
-    top_p = chatRequest.top_p if chatRequest.top_p < 1.0 else None  # top_p=1.0の場合はNone（無効化）
-    stop_strings = chatRequest.stop if chatRequest.stop else []
-    stream = chatRequest.stream
+# Error handlers
+@app.exception_handler(ValidationError)
+async def validation_error_handler(request: Request, exc: ValidationError):
+    """Handle validation errors"""
+    return JSONResponse(
+        status_code=400,
+        content={
+            "error": {
+                "message": str(exc),
+                "type": "invalid_request_error",
+                "code": "validation_error"
+            }
+        }
+    )
 
-    # model.chat()のパラメータを構築
-    chat_kwargs = {
-        "image": image,
-        "msgs": msgs,
-        "tokenizer": tokenizer,
-        "sampling": True,
-        "temperature": temperature,
-        "stream": stream,
-    }
 
-    # top_pが指定されている場合のみ追加（MiniCPM-Vが対応しているかは不明だが、試してみる）
-    if top_p is not None:
-        chat_kwargs["top_p"] = top_p
+@app.exception_handler(InferenceError)
+async def inference_error_handler(request: Request, exc: InferenceError):
+    """Handle inference errors"""
+    logger.error(f"Inference error: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": {
+                "message": str(exc),
+                "type": "server_error",
+                "code": "inference_error"
+            }
+        }
+    )
 
-    # max_tokensが指定されている場合、ストリーミング中に制限を適用
-    res = model.chat(**chat_kwargs)
 
-    generated_text = ""
-    index = 0
-    token_count = 0
+@app.exception_handler(NeuroLLMError)
+async def neuro_llm_error_handler(request: Request, exc: NeuroLLMError):
+    """Handle general Neuro-LLM-Server errors"""
+    logger.error(f"Error: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": {
+                "message": str(exc),
+                "type": "server_error",
+                "code": "internal_error"
+            }
+        }
+    )
 
-    for new_text in res:
-        # max_tokens制限をチェック
-        if max_tokens > 0 and token_count >= max_tokens:
-            break
 
-        # stop文字列をチェック
-        generated_text += new_text
-        should_stop = False
-        for stop_str in stop_strings:
-            if stop_str in generated_text:
-                # stop文字列が見つかった場合、その前までを返す
-                stop_index = generated_text.find(stop_str)
-                if stop_index >= 0:
-                    generated_text = generated_text[:stop_index]
-                    should_stop = True
-                    break
-
-        if should_stop:
-            break
-
-        # トークン数を概算（簡易的に文字数から推定）
-        token_count += len(new_text.split())
-
-        print(new_text, flush=True, end='')
-        delta = Delta(role="assistant", content=new_text)
-        choice = Choice(index=index, finish_reason=None, delta=delta)
-        chatResponse = ChatResponse(choices=[choice])
-        index += 1
-        yield chatResponse.model_dump_json()
-
-    # 最終チャンク（finish_reason="stop"）
-    delta = Delta(role="assistant", content="")
-    finish_reason = "stop" if (max_tokens > 0 and token_count >= max_tokens) or should_stop else "stop"
-    choice = Choice(index=index, finish_reason=finish_reason, delta=delta)
-    chatResponse = ChatResponse(choices=[choice])
-    yield chatResponse.model_dump_json()
+def chat_generator(chat_request: ChatRequest):
+    """Generate chat response chunks"""
+    if inference_engine is None:
+        raise InferenceError("Inference engine not initialized")
+    
+    try:
+        # Convert Pydantic models to dicts for inference engine
+        messages = []
+        for msg in chat_request.messages:
+            content_list = []
+            for content in msg.content:
+                if content.type == "text":
+                    content_list.append({"type": "text", "text": content.text})
+                elif content.type == "image_url" and content.image_url:
+                    content_list.append({
+                        "type": "image_url",
+                        "image_url": {"url": content.image_url.url}
+                    })
+            messages.append({"role": msg.role, "content": content_list})
+        
+        # Generate response
+        generator = inference_engine.generate(
+            messages=messages,
+            temperature=chat_request.temperature,
+            max_tokens=chat_request.max_tokens,
+            top_p=chat_request.top_p if chat_request.top_p < 1.0 else None,
+            stop=chat_request.stop if chat_request.stop else [],
+            stream=chat_request.stream,
+        )
+        
+        index = 0
+        for new_text in generator:
+            delta = Delta(role="assistant", content=new_text)
+            choice = Choice(index=index, finish_reason=None, delta=delta)
+            model_name = config.model.name if config else "MiniCPM-Llama3-V-2_5"
+            chat_response = ChatResponse(
+                id=f"chatcmpl-{int(time.time())}",
+                created=int(time.time()),
+                model=model_name,
+                choices=[choice]
+            )
+            index += 1
+            yield chat_response.model_dump_json() + "\n"
+        
+        # Final chunk
+        delta = Delta(role="assistant", content="")
+        choice = Choice(index=index, finish_reason="stop", delta=delta)
+        model_name = config.model.name if config else "MiniCPM-Llama3-V-2_5"
+        chat_response = ChatResponse(
+            id=f"chatcmpl-{int(time.time())}",
+            created=int(time.time()),
+            model=model_name,
+            choices=[choice]
+        )
+        yield chat_response.model_dump_json() + "\n"
+        
+    except Exception as e:
+        logger.error(f"Error in chat_generator: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
 
 
 @app.post("/v1/chat/completions")
-def chat_completions(chatRequest: ChatRequest):
-    # ストリーミングモードの場合
-    if chatRequest.stream:
-        return EventSourceResponse(chat_generator(chatRequest))
-    else:
-        # 非ストリーミングモード（同期応答）
-        try:
-            # 通常のジェネレータを実行して結果を収集
+async def chat_completions(chat_request: ChatRequest):
+    """Chat completions endpoint"""
+    if inference_engine is None:
+        raise HTTPException(status_code=503, detail="Server not ready")
+    
+    # Execute with queue management
+    async def process_request():
+        if chat_request.stream:
+            return EventSourceResponse(chat_generator(chat_request))
+        else:
+            # Non-streaming mode
             result_text = ""
-            for chunk_json in chat_generator(chatRequest):
-                chunk = json.loads(chunk_json)
+            for chunk_json in chat_generator(chat_request):
+                chunk = json.loads(chunk_json.strip())
                 if chunk.get("choices") and len(chunk["choices"]) > 0:
                     delta = chunk["choices"][0].get("delta", {})
                     content = delta.get("content", "")
                     if content:
                         result_text += content
-
-            # 非ストリーミング形式のレスポンスを返す
-            from datetime import datetime
+            
+            # Return non-streaming response
+            model_name = config.model.name if config else "MiniCPM-Llama3-V-2_5"
             response = {
-                "id": "chatcmpl-00000",
+                "id": f"chatcmpl-{int(time.time())}",
                 "object": "chat.completion",
-                "created": int(datetime.now().timestamp()),
-                "model": "MiniCPM-Llama3-V-2_5",
+                "created": int(time.time()),
+                "model": model_name,
                 "choices": [{
                     "index": 0,
                     "message": {
@@ -293,14 +322,64 @@ def chat_completions(chatRequest: ChatRequest):
                     "finish_reason": "stop"
                 }],
                 "usage": {
-                    "prompt_tokens": 0,  # 簡易実装のため0
-                    "completion_tokens": 0,  # 簡易実装のため0
-                    "total_tokens": 0  # 簡易実装のため0
+                    "prompt_tokens": 0,  # TODO: Implement token counting
+                    "completion_tokens": 0,  # TODO: Implement token counting
+                    "total_tokens": 0  # TODO: Implement token counting
                 }
             }
             return response
-        except Exception as e:
-            print(f"[ERROR] エラー: {e}")
-            import traceback
-            traceback.print_exc()
-            return {"error": str(e)}, 500
+    
+    if request_queue is None:
+        raise HTTPException(status_code=503, detail="Request queue not initialized")
+    
+    return await request_queue.execute(process_request())
+
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    if monitoring is None:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "unhealthy", "reason": "monitoring not initialized"}
+        )
+    
+    health = monitoring.get_health_status()
+    status_code = 200 if health["status"] == "healthy" else 503
+    
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "status": health["status"],
+            "error_rate": health["error_rate"],
+            "gpu_memory_percent": health["gpu_memory_percent"],
+            "gpu_memory_ok": health["gpu_memory_ok"],
+        }
+    )
+
+
+@app.get("/metrics")
+async def metrics():
+    """Prometheus metrics endpoint"""
+    if monitoring is None:
+        return JSONResponse(
+            status_code=503,
+            content={"error": "monitoring not initialized"}
+        )
+    
+    from fastapi.responses import Response
+    return Response(
+        content=monitoring.get_prometheus_metrics(),
+        media_type="text/plain"
+    )
+
+
+@app.get("/")
+async def root():
+    """Root endpoint"""
+    return {
+        "name": "Neuro-LLM-Server",
+        "version": "2.0.0",
+        "model": config.model.name if config else "unknown",
+        "status": "running"
+    }

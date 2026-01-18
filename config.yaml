@@ -1,0 +1,85 @@
+# Neuro-LLM-Server Configuration File
+
+# Model Configuration
+model:
+  # Model name from Hugging Face
+  # Options:
+  #   - openbmb/MiniCPM-Llama3-V-2_5-int4 (int4 quantized, ~8GB VRAM)
+  #   - openbmb/MiniCPM-Llama3-V-2_5-int8 (int8 quantized, ~12GB VRAM)
+  #   - openbmb/MiniCPM-Llama3-V-2_5 (full precision, ~16GB VRAM)
+  name: "openbmb/MiniCPM-Llama3-V-2_5-int4"
+  
+  # Quantization type (auto-detected from model name if not specified)
+  # Options: int4, int8, fp16, fp32
+  quantization: "int4"
+  
+  # Trust remote code (required for MiniCPM models)
+  trust_remote_code: true
+
+# GPU Configuration
+gpu:
+  # CUDA_VISIBLE_DEVICES (empty string = use all available GPUs)
+  # For 5090 only: "0"
+  # For 4070 Super only: "1"
+  # For both: "0,1"
+  cuda_visible_devices: "0"
+  
+  # Device map strategy
+  # Options: auto, single, balanced
+  device_map: "auto"
+
+# Server Configuration
+server:
+  # Host to bind to
+  host: "127.0.0.1"
+  
+  # Port to listen on
+  port: 8000
+  
+  # Request timeout in seconds
+  timeout: 30
+  
+  # Maximum concurrent requests
+  max_concurrent_requests: 4
+  
+  # Enable request queuing when max_concurrent_requests is reached
+  enable_queue: true
+
+# Inference Default Parameters
+inference:
+  # Default temperature (0.0 to 2.0)
+  temperature: 0.7
+  
+  # Default max tokens
+  max_tokens: 200
+  
+  # Default top_p (1.0 = disabled)
+  top_p: 1.0
+  
+  # Enable torch.compile for optimization (requires PyTorch 2.0+)
+  enable_torch_compile: false
+
+# Monitoring Configuration
+monitoring:
+  # Enable monitoring endpoints
+  enabled: true
+  
+  # Enable GPU monitoring (requires pynvml)
+  enable_gpu_monitoring: true
+  
+  # Metrics collection interval in seconds
+  metrics_interval: 5.0
+
+# Logging Configuration
+logging:
+  # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  level: "INFO"
+  
+  # Log file path (empty = console only)
+  log_file: ""
+
+# Hugging Face Configuration
+huggingface:
+  # Hugging Face token (for gated models)
+  # Can be set via HF_TOKEN environment variable
+  token: ""
