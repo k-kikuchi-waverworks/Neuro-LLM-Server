@@ -81,39 +81,39 @@ class Config:
     monitoring: MonitoringConfig = field(default_factory=MonitoringConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
     huggingface: HuggingFaceConfig = field(default_factory=HuggingFaceConfig)
-    
+
     @classmethod
     def from_file(cls, config_path: Optional[str] = None) -> "Config":
         """
         Load configuration from YAML file
-        
+
         Args:
             config_path: Path to config file. If None, uses default or environment variable.
-        
+
         Returns:
             Config instance
         """
         if config_path is None:
             config_path = os.getenv("NEURO_LLM_CONFIG", "config.yaml")
-        
+
         config_file = Path(config_path)
-        
+
         if not config_file.exists():
             logger.warning(f"Config file not found: {config_path}, using defaults")
             return cls()
-        
+
         if yaml is None:
             raise ValidationError("PyYAML is required to load config file. Install with: pip install PyYAML")
-        
+
         try:
             with open(config_file, 'r', encoding='utf-8') as f:
                 data = yaml.safe_load(f) or {}
         except Exception as e:
             raise ValidationError(f"Failed to load config file: {e}")
-        
+
         # Build config from dictionary
         config = cls()
-        
+
         # Model config
         if "model" in data:
             model_data = data["model"]
@@ -132,7 +132,7 @@ class Config:
                     config.model.quantization = "fp16"
                 elif "fp32" in config.model.name.lower():
                     config.model.quantization = "fp32"
-        
+
         # GPU config
         if "gpu" in data:
             gpu_data = data["gpu"]
@@ -146,7 +146,7 @@ class Config:
             # Check environment variable even if gpu section is missing
             cuda_devices = os.getenv("CUDA_VISIBLE_DEVICES", config.gpu.cuda_visible_devices)
             config.gpu.cuda_visible_devices = cuda_devices
-        
+
         # Server config
         if "server" in data:
             server_data = data["server"]
@@ -157,7 +157,7 @@ class Config:
                 max_concurrent_requests=server_data.get("max_concurrent_requests", config.server.max_concurrent_requests),
                 enable_queue=server_data.get("enable_queue", config.server.enable_queue),
             )
-        
+
         # Inference config
         if "inference" in data:
             inference_data = data["inference"]
@@ -167,7 +167,7 @@ class Config:
                 top_p=inference_data.get("top_p", config.inference.top_p),
                 enable_torch_compile=inference_data.get("enable_torch_compile", config.inference.enable_torch_compile),
             )
-        
+
         # Monitoring config
         if "monitoring" in data:
             monitoring_data = data["monitoring"]
@@ -176,7 +176,7 @@ class Config:
                 enable_gpu_monitoring=monitoring_data.get("enable_gpu_monitoring", config.monitoring.enable_gpu_monitoring),
                 metrics_interval=monitoring_data.get("metrics_interval", config.monitoring.metrics_interval),
             )
-        
+
         # Logging config
         if "logging" in data:
             logging_data = data["logging"]
@@ -184,7 +184,7 @@ class Config:
                 level=logging_data.get("level", config.logging.level),
                 log_file=logging_data.get("log_file", config.logging.log_file),
             )
-        
+
         # Hugging Face config
         if "huggingface" in data:
             hf_data = data["huggingface"]
@@ -194,41 +194,41 @@ class Config:
             # Check environment variable even if huggingface section is missing
             hf_token = os.getenv("HF_TOKEN", config.huggingface.token)
             config.huggingface.token = hf_token
-        
+
         # Apply GPU settings
         if config.gpu.cuda_visible_devices:
             os.environ["CUDA_VISIBLE_DEVICES"] = config.gpu.cuda_visible_devices
             logger.info(f"Set CUDA_VISIBLE_DEVICES={config.gpu.cuda_visible_devices}")
-        
+
         return config
-    
+
     def validate(self) -> None:
         """Validate configuration values"""
         errors = []
-        
+
         # Validate model name
         if not self.model.name:
             errors.append("model.name is required")
-        
+
         # Validate quantization
         if self.model.quantization not in ["int4", "int8", "fp16", "fp32"]:
             errors.append(f"Invalid quantization type: {self.model.quantization}")
-        
+
         # Validate server port
         if not (1 <= self.server.port <= 65535):
             errors.append(f"Invalid server port: {self.server.port}")
-        
+
         # Validate timeout
         if self.server.timeout <= 0:
             errors.append(f"Invalid timeout: {self.server.timeout}")
-        
+
         # Validate temperature
         if not (0.0 <= self.inference.temperature <= 2.0):
             errors.append(f"Invalid temperature: {self.inference.temperature}")
-        
+
         # Validate max_tokens
         if self.inference.max_tokens <= 0:
             errors.append(f"Invalid max_tokens: {self.inference.max_tokens}")
-        
+
         if errors:
             raise ValidationError(f"Configuration validation failed:\n" + "\n".join(f"  - {e}" for e in errors))

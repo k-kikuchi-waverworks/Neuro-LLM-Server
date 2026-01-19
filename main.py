@@ -90,53 +90,53 @@ class ChatResponse(BaseModel):
 async def lifespan(app: FastAPI):
     """Lifespan context manager for startup and shutdown"""
     global config, model_manager, inference_engine, monitoring, request_queue, logger
-    
+
     # Startup
     try:
         # Load configuration
         config_path = os.getenv("NEURO_LLM_CONFIG", "config.yaml")
         config = Config.from_file(config_path)
         config.validate()
-        
+
         # Setup logging
         setup_logging(
             log_level=config.logging.level,
             log_file=config.logging.log_file if config.logging.log_file else None
         )
         logger = get_logger(__name__)
-        
+
         logger.info("=" * 60)
         logger.info("Neuro-LLM-Server Starting")
         logger.info("=" * 60)
         logger.info(f"Model: {config.model.name}")
         logger.info(f"Quantization: {config.model.quantization}")
         logger.info(f"Server: {config.server.host}:{config.server.port}")
-        
+
         # Initialize components
         model_manager = ModelManager(config)
         logger.info("Loading model...")
         model_manager.load_model()
         logger.info("Model loaded successfully")
-        
+
         inference_engine = InferenceEngine(model_manager, config)
         monitoring = Monitoring(config)
         request_queue = RequestQueue(
             max_concurrent=config.server.max_concurrent_requests,
             enable_queue=config.server.enable_queue
         )
-        
+
         logger.info("=" * 60)
         logger.info("Neuro-LLM-Server Ready")
         logger.info("=" * 60)
-        
+
     except Exception as e:
         logger.error(f"Failed to start server: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)
-    
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down Neuro-LLM-Server...")
 
@@ -166,11 +166,11 @@ async def timing_middleware(request: Request, call_next):
     start_time = time.time()
     response = await call_next(request)
     latency = time.time() - start_time
-    
+
     # Record metrics (skip for monitoring endpoints)
     if monitoring and not request.url.path.startswith(("/health", "/metrics")):
         monitoring.record_request(latency, error=response.status_code >= 400)
-    
+
     return response
 
 
@@ -226,7 +226,7 @@ def chat_generator(chat_request: ChatRequest):
     """Generate chat response chunks"""
     if inference_engine is None:
         raise InferenceError("Inference engine not initialized")
-    
+
     try:
         # Convert Pydantic models to dicts for inference engine
         messages = []
@@ -241,7 +241,7 @@ def chat_generator(chat_request: ChatRequest):
                         "image_url": {"url": content.image_url.url}
                     })
             messages.append({"role": msg.role, "content": content_list})
-        
+
         # Generate response
         generator = inference_engine.generate(
             messages=messages,
@@ -251,7 +251,7 @@ def chat_generator(chat_request: ChatRequest):
             stop=chat_request.stop if chat_request.stop else [],
             stream=chat_request.stream,
         )
-        
+
         index = 0
         for new_text in generator:
             delta = Delta(role="assistant", content=new_text)
@@ -265,7 +265,7 @@ def chat_generator(chat_request: ChatRequest):
             )
             index += 1
             yield chat_response.model_dump_json() + "\n"
-        
+
         # Final chunk
         delta = Delta(role="assistant", content="")
         choice = Choice(index=index, finish_reason="stop", delta=delta)
@@ -277,7 +277,7 @@ def chat_generator(chat_request: ChatRequest):
             choices=[choice]
         )
         yield chat_response.model_dump_json() + "\n"
-        
+
     except Exception as e:
         logger.error(f"Error in chat_generator: {e}")
         import traceback
@@ -290,7 +290,7 @@ async def chat_completions(chat_request: ChatRequest):
     """Chat completions endpoint"""
     if inference_engine is None:
         raise HTTPException(status_code=503, detail="Server not ready")
-    
+
     # Execute with queue management
     async def process_request():
         if chat_request.stream:
@@ -305,7 +305,7 @@ async def chat_completions(chat_request: ChatRequest):
                     content = delta.get("content", "")
                     if content:
                         result_text += content
-            
+
             # Return non-streaming response
             model_name = config.model.name if config else "MiniCPM-Llama3-V-2_5"
             response = {
@@ -328,10 +328,10 @@ async def chat_completions(chat_request: ChatRequest):
                 }
             }
             return response
-    
+
     if request_queue is None:
         raise HTTPException(status_code=503, detail="Request queue not initialized")
-    
+
     return await request_queue.execute(process_request())
 
 
@@ -343,10 +343,10 @@ async def health_check():
             status_code=503,
             content={"status": "unhealthy", "reason": "monitoring not initialized"}
         )
-    
+
     health = monitoring.get_health_status()
     status_code = 200 if health["status"] == "healthy" else 503
-    
+
     return JSONResponse(
         status_code=status_code,
         content={
@@ -366,7 +366,7 @@ async def metrics():
             status_code=503,
             content={"error": "monitoring not initialized"}
         )
-    
+
     from fastapi.responses import Response
     return Response(
         content=monitoring.get_prometheus_metrics(),
