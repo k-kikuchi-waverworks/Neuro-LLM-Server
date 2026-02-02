@@ -66,18 +66,18 @@ Create or edit `config.yaml` in the Neuro-LLM-Server directory:
 ```yaml
 # Model Configuration
 model:
-  name: "openbmb/MiniCPM-Llama3-V-2_5-int4"  # int4, int8, or full precision
-  quantization: "int4"  # int4, int8, fp16, fp32
+  name: 'openbmb/MiniCPM-Llama3-V-2_5-int4' # int4, int8, or full precision
+  quantization: 'int4' # int4, int8, fp16, fp32
   trust_remote_code: true
 
 # GPU Configuration
 gpu:
-  cuda_visible_devices: "0"  # Use GPU 0 (5090)
-  device_map: "auto"
+  cuda_visible_devices: '0' # Use GPU 0 (5090)
+  device_map: 'auto'
 
 # Server Configuration
 server:
-  host: "127.0.0.1"
+  host: '127.0.0.1'
   port: 8000
   timeout: 30
   max_concurrent_requests: 4
@@ -98,12 +98,12 @@ monitoring:
 
 # Logging Configuration
 logging:
-  level: "INFO"
-  log_file: ""  # Empty = console only
+  level: 'INFO'
+  log_file: '' # Empty = console only
 
 # Hugging Face Configuration
 huggingface:
-  token: ""  # Set via HF_TOKEN environment variable
+  token: '' # Set via HF_TOKEN environment variable
 ```
 
 ### Environment Variables
@@ -136,6 +136,7 @@ The server is automatically started when using `.\start_all.ps1` from the projec
 OpenAI-compatible chat completions endpoint.
 
 **Request:**
+
 ```json
 {
   "messages": [
@@ -162,6 +163,7 @@ OpenAI-compatible chat completions endpoint.
 ```
 
 **Response (Streaming):**
+
 ```
 data: {"id":"chatcmpl-...","object":"chat.completions.chunk","choices":[{"delta":{"content":"The"}}]}
 data: {"id":"chatcmpl-...","object":"chat.completions.chunk","choices":[{"delta":{"content":" image"}}]}
@@ -173,6 +175,7 @@ data: {"id":"chatcmpl-...","object":"chat.completions.chunk","choices":[{"delta"
 Health check endpoint.
 
 **Response:**
+
 ```json
 {
   "status": "healthy",
@@ -187,6 +190,7 @@ Health check endpoint.
 Prometheus metrics endpoint.
 
 **Response:**
+
 ```
 # HELP neuro_llm_requests_total Total number of requests
 # TYPE neuro_llm_requests_total counter
@@ -219,12 +223,14 @@ neuro_llm_requests_total 42
 ### Single GPU (5090)
 
 Set in `config.yaml`:
+
 ```yaml
 gpu:
-  cuda_visible_devices: "0"
+  cuda_visible_devices: '0'
 ```
 
 Or via environment variable:
+
 ```powershell
 $env:CUDA_VISIBLE_DEVICES="0"
 ```
@@ -232,10 +238,11 @@ $env:CUDA_VISIBLE_DEVICES="0"
 ### Multi-GPU (Future)
 
 For multi-GPU support, set:
+
 ```yaml
 gpu:
-  cuda_visible_devices: "0,1"
-  device_map: "balanced"
+  cuda_visible_devices: '0,1'
+  device_map: 'balanced'
 ```
 
 ## Monitoring
@@ -253,6 +260,7 @@ curl http://127.0.0.1:8000/metrics
 ```
 
 Metrics include:
+
 - Request count and error rate
 - Average, min, max latency
 - Throughput (requests/second)

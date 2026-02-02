@@ -7,11 +7,11 @@ model:
   #   - openbmb/MiniCPM-Llama3-V-2_5-int4 (int4 quantized, ~8GB VRAM)
   #   - openbmb/MiniCPM-Llama3-V-2_5-int8 (int8 quantized, ~12GB VRAM)
   #   - openbmb/MiniCPM-Llama3-V-2_5 (full precision, ~16GB VRAM)
-  name: "openbmb/MiniCPM-Llama3-V-2_5-int4"
+  name: 'openbmb/MiniCPM-Llama3-V-2_5-int4'
 
   # Quantization type (auto-detected from model name if not specified)
   # Options: int4, int8, fp16, fp32
-  quantization: "int4"
+  quantization: 'int4'
 
   # Trust remote code (required for MiniCPM models)
   trust_remote_code: true
@@ -22,16 +22,16 @@ gpu:
   # For 5090 only: "0"
   # For 4070 Super only: "1"
   # For both: "0,1"
-  cuda_visible_devices: "0"
+  cuda_visible_devices: '0'
 
   # Device map strategy
   # Options: auto, single, balanced
-  device_map: "auto"
+  device_map: 'auto'
 
 # Server Configuration
 server:
   # Host to bind to
-  host: "127.0.0.1"
+  host: '127.0.0.1'
 
   # Port to listen on
   port: 8000
@@ -73,13 +73,13 @@ monitoring:
 # Logging Configuration
 logging:
   # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
-  level: "INFO"
+  level: 'INFO'
 
   # Log file path (empty = console only)
-  log_file: ""
+  log_file: ''
 
 # Hugging Face Configuration
 huggingface:
   # Hugging Face token (for gated models)
   # Can be set via HF_TOKEN environment variable
-  token: ""
+  token: ''
