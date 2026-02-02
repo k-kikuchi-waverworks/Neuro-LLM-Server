@@ -66,44 +66,44 @@ Create or edit `config.yaml` in the Neuro-LLM-Server directory:
 ```yaml
 # Model Configuration
 model:
-  name: 'openbmb/MiniCPM-Llama3-V-2_5-int4' # int4, int8, or full precision
-  quantization: 'int4' # int4, int8, fp16, fp32
-  trust_remote_code: true
+    name: 'openbmb/MiniCPM-Llama3-V-2_5-int4' # int4, int8, or full precision
+    quantization: 'int4' # int4, int8, fp16, fp32
+    trust_remote_code: true
 
 # GPU Configuration
 gpu:
-  cuda_visible_devices: '0' # Use GPU 0 (5090)
-  device_map: 'auto'
+    cuda_visible_devices: '0' # Use GPU 0 (5090)
+    device_map: 'auto'
 
 # Server Configuration
 server:
-  host: '127.0.0.1'
-  port: 8000
-  timeout: 30
-  max_concurrent_requests: 4
-  enable_queue: true
+    host: '127.0.0.1'
+    port: 8000
+    timeout: 30
+    max_concurrent_requests: 4
+    enable_queue: true
 
 # Inference Default Parameters
 inference:
-  temperature: 0.7
-  max_tokens: 200
-  top_p: 1.0
-  enable_torch_compile: false
+    temperature: 0.7
+    max_tokens: 200
+    top_p: 1.0
+    enable_torch_compile: false
 
 # Monitoring Configuration
 monitoring:
-  enabled: true
-  enable_gpu_monitoring: true
-  metrics_interval: 5.0
+    enabled: true
+    enable_gpu_monitoring: true
+    metrics_interval: 5.0
 
 # Logging Configuration
 logging:
-  level: 'INFO'
-  log_file: '' # Empty = console only
+    level: 'INFO'
+    log_file: '' # Empty = console only
 
 # Hugging Face Configuration
 huggingface:
-  token: '' # Set via HF_TOKEN environment variable
+    token: '' # Set via HF_TOKEN environment variable
 ```
 
 ### Environment Variables
@@ -139,26 +139,26 @@ OpenAI-compatible chat completions endpoint.
 
 ```json
 {
-  "messages": [
-    {
-      "role": "user",
-      "content": [
+    "messages": [
         {
-          "type": "text",
-          "text": "What is in this image?"
-        },
-        {
-          "type": "image_url",
-          "image_url": {
-            "url": "data:image/jpeg;base64,..."
-          }
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "What is in this image?"
+                },
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": "data:image/jpeg;base64,..."
+                    }
+                }
+            ]
         }
-      ]
-    }
-  ],
-  "temperature": 0.7,
-  "max_tokens": 200,
-  "stream": true
+    ],
+    "temperature": 0.7,
+    "max_tokens": 200,
+    "stream": true
 }
 ```
 
@@ -178,10 +178,10 @@ Health check endpoint.
 
 ```json
 {
-  "status": "healthy",
-  "error_rate": 0.0,
-  "gpu_memory_percent": 45.2,
-  "gpu_memory_ok": true
+    "status": "healthy",
+    "error_rate": 0.0,
+    "gpu_memory_percent": 45.2,
+    "gpu_memory_ok": true
 }
 ```
 
@@ -226,7 +226,7 @@ Set in `config.yaml`:
 
 ```yaml
 gpu:
-  cuda_visible_devices: '0'
+    cuda_visible_devices: '0'
 ```
 
 Or via environment variable:
@@ -241,8 +241,8 @@ For multi-GPU support, set:
 
 ```yaml
 gpu:
-  cuda_visible_devices: '0,1'
-  device_map: 'balanced'
+    cuda_visible_devices: '0,1'
+    device_map: 'balanced'
 ```
 
 ## Monitoring
